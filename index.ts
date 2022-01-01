@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import * as erc20Abi from "./erc20Abi.json";
 import * as uniNftAbi from "./uniNftAbi.json";
 import * as uniRouterAbi from "./uniRouterAbi.json";
+import { setTimeout } from 'timers/promises';
 
 import { nearestUsableTick } from '@uniswap/v3-sdk/'
 import { abi as IUniswapV3PoolABI } from "@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json";
@@ -115,13 +116,15 @@ class umr {
     uniPool:string,
     uniRouterAddress:string,
     maxRatioDeviation:number,
-    maxSlippage:number
+    maxSlippage:number,
+    tickCountPerSide:number
   ) {
     this.chainId = chainId;
     this.provider = new ethers.providers.JsonRpcProvider(rpcProvider);
     this.wallet = new ethers.Wallet(privateKey, this.provider);
     this.maxRatioDeviation = maxRatioDeviation; // 0.2 = ratio of token0 and token1 values has to be between 0.2 and 5, otherwise will trade to 1:1
     this.maxSlippage = new BigNumber(maxSlippage); // 0.01 = 1% max slippage
+    this.tickCountPerSide = tickCountPerSide;
     this.poolContract = new ethers.Contract(
       uniPool,
       IUniswapV3PoolABI,
@@ -303,13 +306,15 @@ class umr {
   }
 
   public async doNextAction() {
+	  const waitTimeBeforeOpenPositionMs = 2000;
     console.log("TICK - ", new Date());
+    let startTime = new Date().getTime();
     if (this.currentlyRunning) {
       console.log("currently running, skipping tick...");
       return;
     }
+    try {
     this.currentlyRunning = true;
-    let startTime = new Date().getTime();
     await this.myPoolState.updatePoolState(); // to get latest price info
     // check if there's anything to do:
     // if position is out of range, close it
@@ -324,8 +329,13 @@ class umr {
     if (this.nftId == -1) {
       console.log("there is no position, checking balances");
       await this.updateBalance();
-      console.log("opening position");
+	      await setTimeout(waitTimeBeforeOpenPositionMs);
+	      console.log("opening position");
       await this.openPosition();
+      console.log("position now open!");
+    }
+    } catch (e) {
+    console.log("ERROR encountered: ", e);
     }
     console.log("DONE checking next action");
     this.currentlyRunning = false;
@@ -355,14 +365,15 @@ class umr {
 
 async function main(privateKey:string) {
   const tickIntervalMs = 60000;
-  var rpcProvider = "https://arb1.arbitrum.io/rpc";
+  const rpcProvider = "https://arb1.arbitrum.io/rpc";
   const uniNft = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"; // on Arbitrum
   const uniPool = "0xC31E54c7a869B9FcBEcc14363CF510d1c41fa443" // WETH-USDC 0.05% on Arbitrum
   const uniRouter = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45" // on Arbitrum 
   const chainId = 42161;
   const maxRatioDeviation = 0.4; // 0.2 = ratio of token0 and token1 values has to be between 0.2 and 5, otherwise will trade to 1:1
   const maxSlippage = 0.01; // 0.01 = 1% max slippage
-  var myUmr = new umr(chainId, privateKey, rpcProvider, uniNft, uniPool, uniRouter, maxRatioDeviation, maxSlippage);
+  const tickCountPerSide = 3;
+  var myUmr = new umr(chainId, privateKey, rpcProvider, uniNft, uniPool, uniRouter, maxRatioDeviation, maxSlippage, tickCountPerSide);
 
   await myUmr.init();
   myUmr.myPoolImmutables.print();
