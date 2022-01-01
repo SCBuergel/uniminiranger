@@ -287,7 +287,17 @@ class umr {
     ]);
 
     var receipt = await this.sendTx(treq);
-    this.nftId = parseInt(receipt.logs[6].topics[1]);
+    // index of log might be off in case we just add one-sided liquidity, so we have to search for the right one:
+    var found = false;
+    receipt.logs.forEach((log) => {
+      if (log.topics[0] == "0x3067048beee31b25b2f1681f88dac838c8bba36af25bfb2b7cf7473a5847e35f") {
+        this.nftId = parseInt(log.topics[1], 16);
+	found = true;
+      }
+    });
+    if (!found) {
+      throw Error();
+    }
 
     console.log("minted NFT id: ", this.nftId);
   }
