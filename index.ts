@@ -105,7 +105,7 @@ class umr {
   uniRouter:ethers.Contract;
   currentlyRunning:boolean = false;
   maxDelaySeconds:number = 60; // for uniswap transactions to time out, in seconds
-  tickCountPerSide:number = 2; // for positions to open, ticks on each side of the current tick
+  tickCountPerSide:number = 3; // for positions to open, ticks on each side of the current tick
 
   constructor(
     chainId:number,
@@ -181,10 +181,10 @@ class umr {
     var price = (sqrtPriceX96.pow(2)).div(new BigNumber(2).pow(192))
     var valueBalance0 = balance0.times(price);
     console.log("value of balance0: ", valueBalance0.toString());
-    var ratio = valueBalance0.div(balance1);
+    var ratio = valueBalance0.div(balance1.plus(valueBalance0));
     console.log("ratio: ", ratio.toNumber());
   
-    if (ratio.toNumber() < this.maxRatioDeviation || ratio.toNumber() > 1 / this.maxRatioDeviation) {
+    if (ratio.toNumber() < this.maxRatioDeviation || ratio.toNumber() > 1 - this.maxRatioDeviation) {
       var sellValue0 = valueBalance0.minus(balance1).div(new BigNumber(2));
       console.log("ratio too far off, need to sell ", sellValue0.toString(), " worth of token0");
       var sellAmount0 = sellValue0.div(price);
@@ -293,6 +293,7 @@ class umr {
   }
 
   public async doNextAction() {
+    console.log("TICK - ", new Date());
     if (this.currentlyRunning) {
       console.log("currently running, skipping tick...");
       return;
@@ -349,7 +350,7 @@ async function main(privateKey:string) {
   const uniPool = "0xC31E54c7a869B9FcBEcc14363CF510d1c41fa443" // WETH-USDC 0.05% on Arbitrum
   const uniRouter = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45" // on Arbitrum 
   const chainId = 42161;
-  const maxRatioDeviation = 0.3; // 0.2 = ratio of token0 and token1 values has to be between 0.2 and 5, otherwise will trade to 1:1
+  const maxRatioDeviation = 0.4; // 0.2 = ratio of token0 and token1 values has to be between 0.2 and 5, otherwise will trade to 1:1
   const maxSlippage = 0.01; // 0.01 = 1% max slippage
   var myUmr = new umr(chainId, privateKey, rpcProvider, uniNft, uniPool, uniRouter, maxRatioDeviation, maxSlippage);
 
